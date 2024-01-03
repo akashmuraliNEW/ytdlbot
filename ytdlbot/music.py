@@ -1,93 +1,142 @@
-import os
+from __future__ import unicode_literals
 
-from pyrogram import Client 
-from pyrogram.filters import me, private, command
+import os, requests, asyncio, math, time, wget
+from pyrogram import filters, Client
 from pyrogram.types import Message
+from os import environ 
 
-from aiohttp import ClientSession
-from aiofiles import open
 from youtube_search import YoutubeSearch
-import yt_dlp
+from youtubesearchpython import SearchVideos
+from yt_dlp import YoutubeDL
+#from info import MUSIC_CHAT
+#FIXIE_SOCKS_HOST= environ.get('FIXIE_SOCKS_HOST')
 
-YDL_OPTIONS = {'format': 'bestaudio/best'}
-
-
-@Client.on_message(
-    command(
-        commands=['music'],
-        prefixes=['.', '/']
-    ) & (me | private)
-)
-async def download_and_send_song(_: Client, message: Message):
-    query = ' '.join(message.command[1:])
-    msg = await message.reply('**🔎 Finding song...**')
-    
+@Client.on_message(filters.command(['song', 's']) & ~filters.private & ~filters.channel)
+async def song(client, message):
+   #if message.chat.id in MUSIC_CHAT:
+    user_id = message.from_user.id 
+    user_name = message.from_user.first_name 
+    rpk = "["+user_name+"](tg://user?id="+str(user_id)+")"
+    query = ''
+    for i in message.command[1:]:
+        query += ' ' + str(i)
+    print(query)
+    m = await message.reply(f"**ѕєαrchíng чσur ѕσng...!\n {query}**")
+    ydl_opts = {
+         "format": "bestaudio[ext=m4a]",
+    }
     try:
         results = YoutubeSearch(query, max_results=1).to_dict()
         link = f"https://youtube.com{results[0]['url_suffix']}"
-        title = results[0]['title'][:40]
-        thumbnail = results[0]['thumbnails'][0]
-        thumb_name = f'{title}.jpg'
-        
-        async with ClientSession() as session:
-            async with session.get(thumbnail, allow_redirects=True) as response:
-                thumb = await response.read()
-        
-            async with open(thumb_name, 'wb') as f:
-                await f.write(thumb)
-        
-        duration = results[0]['duration']
-
+        title = results[0]["title"][:40]       
+        thumbnail = results[0]["thumbnails"][0]
+        thumb_name = f'thumb{title}.jpg'
+        thumb = requests.get(thumbnail, allow_redirects=True)
+        open(thumb_name, 'wb').write(thumb.content)
+        performer = f"[Rebekah]" 
+        duration = results[0]["duration"]
+        url_suffix = results[0]["url_suffix"]
+        views = results[0]["views"]
     except Exception as e:
-        await msg.edit(
-            '''
-**❌ Song not found.\n\nPlease give a valid song name.**\n\nIf bot don't work, write me @ShadowRazea
-            '''.strip()
-        )
         print(str(e))
-        return
-    await msg.edit('**📥 Downloading file...**')
-
+        return await m.edit("**𝙵𝙾𝚄𝙽𝙳 𝙽𝙾𝚃𝙷𝙸𝙽𝙶 𝙿𝙻𝙴𝙰𝚂𝙴 𝙲𝙾𝚁𝚁𝙴𝙲𝚃 𝚃𝙷𝙴 𝚂𝙿𝙴𝙻𝙻𝙸𝙽𝙶 𝙾𝚁 𝙲𝙷𝙴𝙲𝙺 𝚃𝙷𝙴 𝙻𝙸𝙽𝙺**")
+                
+    await m.edit("**dσwnlσαdíng чσur ѕσng...!**")
     try:
-        with yt_dlp.YoutubeDL(YDL_OPTIONS) as ydl:
+        with YoutubeDL(ydl_opts) as ydl:
             info_dict = ydl.extract_info(link, download=False)
             audio_file = ydl.prepare_filename(info_dict)
             ydl.process_info(info_dict)
-        rep = '''
-<b>🎧 Uploader @ShadowRazea
-This bot is uploaded on my \
-<a href='https://github.com/shadowrezi/just-userbot'>GitHub</a>
-</b>
-'''.strip()
-        secmul, dur, dur_arr = 1, 0, duration.split(':')
-        
-        for i in range(len(dur_arr) - 1, -1, -1):
-            dur += int(float(dur_arr[i])) * secmul
-            secmul *= 60
 
-        await msg.edit('**📤 Uploading file...**')
+        cap = f'🎶 𝐓𝐈𝐓𝐋𝐄 ›› {title}\n𝐃𝐔𝐑𝐀𝐓𝐈𝐎𝐍 ›› {duration}'
+        secmul, dur, dur_arr = 1, 0, duration.split(':')
+        for i in range(len(dur_arr)-1, -1, -1):
+            dur += (int(dur_arr[i]) * secmul)
+            secmul *= 60
         await message.reply_audio(
             audio_file,
-            caption=rep,
-            thumb=thumb_name,
+            caption=cap,            
+            quote=False,
             title=title,
             duration=dur,
-        )
-        
-        await msg.delete()
+            reply_to_message_id=message.id,
+            performer=performer,
+            thumb=thumb_name
+        )            
+        await m.delete()
     except Exception as e:
-        await msg.edit(
-            '''
-<b>❌ Error, write to owner @ShadowRazea or add issue on \
-<a href="https://github.com/shadowrezi/just-userbot">GitHub Repository</a>
-</b>
-'''.strip()
-        )
+        await m.edit("**🚫 𝙴𝚁𝚁𝙾𝚁 🚫**")
         print(e)
-
-    finally:
-        os.remove(thumb_name)
+    try:
         os.remove(audio_file)
+        os.remove(thumb_name)
+    except Exception as e:
+        print(e)
+   #else:
+         await message.reply_text(f"<b>Hᴇʏ {message.from_user.mention}❤️... Group is needs to be verified before using Song feature.Contact owner to verify @HELL_GaM</b>")
+        
 
-    print(audio_file)
-    print(thumb_name)
+def get_text(message: Message) -> [None,str]:
+    text_to_return = message.text
+    if message.text is None:
+        return None
+    if " " not in text_to_return:
+        return None
+    try:
+        return message.text.split(None, 1)[1]
+    except IndexError:
+        return None
+
+
+@Client.on_message(filters.command(["video", "mp4"]))
+async def vsong(client, message: Message):
+    urlissed = get_text(message)
+    pablo = await client.send_message(message.chat.id, f"**𝙵𝙸𝙽𝙳𝙸𝙽𝙶 𝚈𝙾𝚄𝚁 𝚅𝙸𝙳𝙴𝙾** `{urlissed}`")
+    if not urlissed:
+        return await pablo.edit("Invalid Command Syntax Please Check help Menu To Know More!")     
+    search = SearchVideos(f"{urlissed}", offset=1, mode="dict", max_results=1)
+    mi = search.result()
+    mio = mi["search_result"]
+    mo = mio[0]["link"]
+    thum = mio[0]["title"]
+    fridayz = mio[0]["id"]
+    mio[0]["channel"]
+    kekme = f"https://img.youtube.com/vi/{fridayz}/hqdefault.jpg"
+    await asyncio.sleep(0.6)
+    url = mo
+    sedlyf = wget.download(kekme)
+    opts = {
+        "format": "best",
+        "addmetadata": True,
+        "key": "FFmpegMetadata",
+        "prefer_ffmpeg": True,
+        "geo_bypass": True,
+        "nocheckcertificate": True,
+        "postprocessors": [{"key": "FFmpegVideoConvertor", "preferedformat": "mp4"}],
+        "outtmpl": "%(id)s.mp4",
+        "logtostderr": False,
+        "quiet": True,
+    }
+    try:
+        with YoutubeDL(opts) as ytdl:
+            ytdl_data = ytdl.extract_info(url, download=True)
+    except Exception as e:
+        return await pablo.edit_text(f"**𝙳𝚘𝚠𝚗𝚕𝚘𝚊𝚍 𝙵𝚊𝚒𝚕𝚎𝚍 𝙿𝚕𝚎𝚊𝚜𝚎 𝚃𝚛𝚢 𝙰𝚐𝚊𝚒𝚗..♥️** \n**Error :** `{str(e)}`")       
+    
+    file_stark = f"{ytdl_data['id']}.mp4"
+    capy = f"""**𝚃𝙸𝚃𝙻𝙴 :** [{thum}]({mo})\n**𝚁𝙴𝚀𝚄𝙴𝚂𝚃𝙴𝙳 𝙱𝚈 :** {message.from_user.mention}"""
+
+    await client.send_video(
+        message.chat.id,
+        video=open(file_stark, "rb"),
+        duration=int(ytdl_data["duration"]),
+        file_name=str(ytdl_data["title"]),
+        thumb=sedlyf,
+        caption=capy,
+        supports_streaming=True,        
+        reply_to_message_id=message.id 
+    )
+    await pablo.delete()
+    for files in (sedlyf, file_stark):
+        if files and os.path.exists(files):
+            os.remove(files)
